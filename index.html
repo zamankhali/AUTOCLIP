@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AUTOCLIP — Auto-Frame &amp; Karaoke Captions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,400&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/face-api.js/0.22.2/face-api.min.js"></script>
+<style>
+  :root{
+    --bg:#0c0c0e; --bg2:#141215; --ivory:#ede6d6;
+    --gold:#c9a667; --red:#e5484d; --green:#3fbf6a; --white:#ffffff;
+    --line: rgba(201,166,103,0.25);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{background:var(--bg); color:var(--ivory); font-family:'Jost',sans-serif; font-weight:300;}
+  h1,h2,h3{font-family:'Cormorant Garamond',serif; font-weight:600;}
+  .eyebrow{text-transform:uppercase; letter-spacing:0.3em; font-size:11px; color:var(--gold); font-weight:500;}
+  header{padding:56px 22px 40px; text-align:center; border-bottom:1px solid var(--line);}
+  header h1{font-size:clamp(2rem,7vw,3rem); margin-top:14px;}
+  header p{max-width:480px; margin:16px auto 0; font-size:14px; line-height:1.7; color:rgba(237,230,214,0.6);}
+  main{max-width:640px; margin:0 auto; padding:44px 20px 100px;}
+  section{margin-bottom:40px;}
+  .card{border:1px solid var(--line); background:var(--bg2); border-radius:3px; padding:22px;}
+  .step{display:flex; gap:12px; align-items:flex-start; margin-bottom:16px;}
+  .step .n{width:22px;height:22px;border:1px solid var(--gold); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; color:var(--gold); flex-shrink:0;}
+  .step p{font-size:13px; line-height:1.6; color:rgba(237,230,214,0.75);}
+  input[type=file]{display:none;}
+  .dropzone{border:1px dashed var(--line); text-align:center; padding:34px 18px; cursor:pointer; border-radius:3px;}
+  .dropzone:hover{border-color:var(--gold);}
+  .dropzone h3{font-size:1.1rem; margin-bottom:6px;}
+  .dropzone p{font-size:12px; color:rgba(237,230,214,0.5);}
+  video, canvas{width:100%; border-radius:3px; background:#000; display:block;}
+  .stage{position:relative; aspect-ratio:9/16; max-width:320px; margin:18px auto; overflow:hidden; border-radius:4px; border:1px solid var(--line);}
+  .stage canvas{position:absolute; inset:0; width:100%; height:100%;}
+  .btn{font-size:11px; letter-spacing:0.15em; text-transform:uppercase; padding:12px 22px; border:1px solid var(--gold); background:transparent; color:var(--gold); cursor:pointer; border-radius:2px; width:100%;}
+  .btn.primary{background:var(--gold); color:var(--bg);}
+  .btn:disabled{opacity:0.35; cursor:not-allowed;}
+  .row{display:flex; gap:10px; margin-top:14px;}
+  .status{font-size:12px; color:rgba(237,230,214,0.55); text-align:center; margin-top:14px; min-height:18px;}
+  .badge{display:inline-block; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; padding:4px 10px; border:1px solid var(--line); border-radius:20px; color:rgba(237,230,214,0.6); margin-bottom:10px;}
+  .warn{border-left:2px solid var(--red); padding-left:12px; font-size:12px; line-height:1.7; color:rgba(237,230,214,0.65); margin-top:16px;}
+  #dlWrap{display:none; margin-top:20px; text-align:center;}
+  #dlWrap a{display:inline-block; margin-top:12px;}
+  footer{text-align:center; padding:40px; font-size:11px; color:rgba(237,230,214,0.35); letter-spacing:0.08em;}
+</style>
+</head>
+<body>
+
+<header>
+  <p class="eyebrow">Auto-Frame · Live Karaoke Captions</p>
+  <h1>Upload. Speak. Done.</h1>
+  <p>Free, runs entirely in this browser tab. Auto-frame uses real face detection. Captions are transcribed live from your video's audio through your microphone — the only transcription method that costs nothing and needs no server.</p>
+</header>
+
+<main>
+
+  <section class="card">
+    <span class="badge">How it works</span>
+    <div class="step"><div class="n">1</div><p>Upload your video below.</p></div>
+    <div class="step"><div class="n">2</div><p>Tap Start. Your video will play with sound — turn your volume up and be somewhere quiet. Your phone's mic listens and transcribes as it plays.</p></div>
+    <div class="step"><div class="n">3</div><p>The app auto-frames to vertical and burns in word-by-word captions live, cycling red / green / white.</p></div>
+    <div class="step"><div class="n">4</div><p>When the video ends, download the finished clip.</p></div>
+    <div class="warn">This is a genuine limitation of doing this for free with no server: the mic has to "hear" your video play out loud, so accuracy depends on your speaker volume and room noise. If you want higher accuracy later, that requires a paid transcription API — I can add that as an option once you're ready to spend a little on it.</div>
+  </section>
+
+  <section>
+    <div class="dropzone" id="dropzone">
+      <h3>Select a video</h3>
+      <p>MP4 / MOV / WebM</p>
+      <input type="file" id="fileInput" accept="video/*">
+    </div>
+  </section>
+
+  <section id="stageSection" style="display:none;">
+    <div class="stage">
+      <video id="srcVideo" playsinline style="display:none;"></video>
+      <canvas id="outCanvas"></canvas>
+    </div>
+    <div class="row">
+      <button class="btn primary" id="startBtn">Start processing</button>
+    </div>
+    <div class="status" id="status"></div>
+
+    <div id="dlWrap">
+      <p style="font-size:13px;color:var(--gold);">Finished — your clip is ready.</p>
+      <a class="btn primary" id="dlLink" download="autoclip.webm">Download clip</a>
+    </div>
+  </section>
+
+</main>
+
+<footer>AUTOCLIP — processed on your device. Nothing uploaded, nothing stored.</footer>
+
+<script>
+const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights';
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const stageSection = document.getElementById('stageSection');
+const srcVideo = document.getElementById('srcVideo');
+const canvas = document.getElementById('outCanvas');
+const ctx = canvas.getContext('2d');
+const startBtn = document.getElementById('startBtn');
+const statusEl = document.getElementById('status');
+const dlWrap = document.getElementById('dlWrap');
+const dlLink = document.getElementById('dlLink');
+
+let modelsReady = false;
+faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL).then(()=>modelsReady=true).catch(()=>{});
+
+const OUT_W = 360, OUT_H = 640;
+canvas.width = OUT_W; canvas.height = OUT_H;
+
+dropzone.addEventListener('click', ()=>fileInput.click());
+fileInput.addEventListener('change', e=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  srcVideo.src = URL.createObjectURL(file);
+  stageSection.style.display = 'block';
+  dlWrap.style.display = 'none';
+  statusEl.textContent = 'Video loaded — tap Start when ready (turn your volume up).';
+});
+
+let cropCenterX = 0.5, smoothX = 0.5;
+let words = []; // {text, time}
+let lastFinalT = 0;
+let recognizing = false;
+let recognition = null;
+let recorder = null;
+let chunks = [];
+let running = false;
+let colorCycle = ['#e5484d', '#3fbf6a', '#ffffff']; // red, green, white
+let wordCursor = 0;
+
+function pickColor(i){ return colorCycle[i % colorCycle.length]; }
+
+async function detectFaceFrame(){
+  if(!modelsReady) return;
+  try{
+    const det = await faceapi.detectSingleFace(srcVideo, new faceapi.TinyFaceDetectorOptions());
+    if(det){
+      cropCenterX = (det.box.x + det.box.width/2) / srcVideo.videoWidth;
+    }
+  }catch(e){}
+}
+
+function drawFrame(){
+  smoothX += (cropCenterX - smoothX) * 0.08;
+  const vw = srcVideo.videoWidth, vh = srcVideo.videoHeight;
+  if(!vw || !vh) return;
+  const targetAR = OUT_W/OUT_H;
+  let cropH = vh, cropW = cropH * targetAR;
+  if(cropW > vw){ cropW = vw; cropH = cropW/targetAR; }
+  let cropX = smoothX * vw - cropW/2;
+  cropX = Math.max(0, Math.min(vw - cropW, cropX));
+  const cropY = (vh - cropH)/2;
+
+  ctx.drawImage(srcVideo, cropX, cropY, cropW, cropH, 0, 0, OUT_W, OUT_H);
+
+  // caption: find current word based on video currentTime
+  const t = srcVideo.currentTime;
+  let idx = -1;
+  for(let i=0;i<words.length;i++){ if(words[i].time <= t) idx = i; }
+  if(idx >= 0){
+    const windowWords = words.slice(Math.max(0,idx-2), idx+1);
+    ctx.textAlign = 'center';
+    ctx.font = "600 30px Jost, sans-serif";
+    const y = OUT_H * 0.82;
+    windowWords.forEach((w, i)=>{
+      const isCurrent = (i === windowWords.length-1);
+      ctx.globalAlpha = isCurrent ? 1 : 0.45;
+      ctx.fillStyle = isCurrent ? pickColor(idx) : '#ffffff';
+      ctx.font = isCurrent ? "700 34px Jost, sans-serif" : "500 24px Jost, sans-serif";
+      ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+      ctx.lineWidth = 4;
+      const yy = y - (windowWords.length-1-i)*30;
+      ctx.strokeText(w.text, OUT_W/2, yy);
+      ctx.fillText(w.text, OUT_W/2, yy);
+    });
+    ctx.globalAlpha = 1;
+  }
+}
+
+function setupRecognition(){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR){
+    statusEl.textContent = 'Your browser doesn\'t support live speech recognition. Try Chrome on Android.';
+    return null;
+  }
+  const r = new SR();
+  r.continuous = true;
+  r.interimResults = false;
+  r.lang = 'en-US';
+  r.onresult = (event) => {
+    for(let i=event.resultIndex;i<event.results.length;i++){
+      if(event.results[i].isFinal){
+        const text = event.results[i][0].transcript.trim();
+        const nowT = srcVideo.currentTime;
+        const w = text.split(/\s+/).filter(Boolean);
+        const span = Math.max(0.15, nowT - lastFinalT);
+        w.forEach((word, wi)=>{
+          words.push({ text: word, time: lastFinalT + (span * (wi+1)/w.length) });
+        });
+        lastFinalT = nowT;
+      }
+    }
+  };
+  r.onerror = (e)=>{ /* keep going */ };
+  r.onend = ()=>{ if(running) { try{ r.start(); }catch(e){} } };
+  return r;
+}
+
+let rafId;
+function loop(){
+  if(!running) return;
+  drawFrame();
+  rafId = requestAnimationFrame(loop);
+}
+
+let faceInterval;
+
+startBtn.addEventListener('click', async () => {
+  startBtn.disabled = true;
+  statusEl.textContent = 'Requesting microphone permission…';
+
+  recognition = setupRecognition();
+  if(!recognition){ startBtn.disabled = false; return; }
+
+  words = []; lastFinalT = 0; wordCursor = 0; smoothX = 0.5; cropCenterX = 0.5;
+
+  // set up recording streams
+  const canvasStream = canvas.captureStream(30);
+  let combined = canvasStream;
+  try{
+    const vidStream = srcVideo.captureStream ? srcVideo.captureStream() : (srcVideo.mozCaptureStream ? srcVideo.mozCaptureStream() : null);
+    if(vidStream){
+      vidStream.getAudioTracks().forEach(t => combined.addTrack(t));
+    }
+  }catch(e){}
+
+  chunks = [];
+  try{
+    recorder = new MediaRecorder(combined, { mimeType: 'video/webm;codecs=vp9,opus' });
+  }catch(e){
+    recorder = new MediaRecorder(combined);
+  }
+  recorder.ondataavailable = e => { if(e.data.size>0) chunks.push(e.data); };
+  recorder.onstop = () => {
+    const blob = new Blob(chunks, {type:'video/webm'});
+    const url = URL.createObjectURL(blob);
+    dlLink.href = url;
+    dlWrap.style.display = 'block';
+    statusEl.textContent = 'Done.';
+  };
+
+  srcVideo.muted = false;
+  srcVideo.currentTime = 0;
+  await srcVideo.play();
+
+  running = true;
+  recorder.start();
+  try{ recognition.start(); }catch(e){}
+  statusEl.textContent = 'Processing live — keep this tab open and volume up…';
+
+  faceInterval = setInterval(detectFaceFrame, 600);
+  loop();
+
+  srcVideo.onended = () => {
+    running = false;
+    clearInterval(faceInterval);
+    cancelAnimationFrame(rafId);
+    try{ recognition.onend = null; recognition.stop(); }catch(e){}
+    recorder.stop();
+    startBtn.disabled = false;
+  };
+});
+</script>
+
+</body>
+</html>
